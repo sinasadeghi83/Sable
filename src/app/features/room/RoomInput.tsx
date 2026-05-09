@@ -317,40 +317,95 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       return nextKey;
     }, []);
 
+    /**
+     * Checks if a given File is an audio file based on its MIME type.
+     * @param file The File object to check
+     * @returns boolean
+     */
+    const isAudioFile = (file: File): boolean => {
+      // Check if the MIME type starts with 'audio/'
+      if (file.type && file.type.startsWith('audio/')) {
+        return true;
+      }
+
+      // Fallback: Sometimes browsers fail to detect the MIME type.
+      // You can optionally check the file extension as a backup.
+      const validExtensions = ['.mp3', '.wav', '.ogg', '.m4a', '.flac', '.aac'];
+      const fileName = file.name.toLowerCase();
+      return validExtensions.some((ext) => fileName.endsWith(ext));
+    };
+
+    /**
+     * Gets the duration of an audio file in seconds.
+     * @param file The audio File object from an input element
+     * @returns A promise resolving to the duration in seconds
+     */
+    const getAudioDuration = (file: File): Promise<number> => {
+      return new Promise((resolve, reject) => {
+        const audio = new Audio();
+        const objectUrl = URL.createObjectURL(file);
+
+        audio.addEventListener('loadedmetadata', () => {
+          URL.revokeObjectURL(objectUrl); // Clean up memory
+          resolve(Math.floor(audio.duration * 1000));
+        });
+
+        audio.addEventListener('error', () => {
+          URL.revokeObjectURL(objectUrl); // Clean up memory
+          reject(new Error('Failed to load audio file and retrieve metadata.'));
+        });
+
+        audio.src = objectUrl;
+      });
+    };
+
     const handleFiles = useCallback(
       async (files: File[], audioMeta?: { waveform: number[]; audioDuration: number }) => {
         setUploadBoard(true);
         const safeFiles = files.map(safeFile);
         const fileItems: TUploadItem[] = [];
+        const metadatas: TUploadMetadata[] = fulfilledPromiseSettledResult(
+          await Promise.allSettled(
+            safeFiles.map(async (f) => {
+              const meta: TUploadMetadata = {
+                markedAsSpoiler: false,
+                waveform: audioMeta?.waveform,
+                audioDuration: audioMeta?.audioDuration,
+              };
+
+              try {
+                if (isAudioFile(f)) {
+                  meta.audioDuration = await getAudioDuration(f);
+                }
+              } catch (e) {
+                console.error(e);
+              }
+              return meta;
+            })
+          )
+        );
 
         if (room.hasEncryptionStateEvent()) {
           const encryptFiles = fulfilledPromiseSettledResult(
             await Promise.allSettled(safeFiles.map((f) => encryptFile(f)))
           );
-          encryptFiles.forEach((ef) =>
+          encryptFiles.forEach((ef, i) => {
             fileItems.push({
               ...ef,
-              metadata: {
-                markedAsSpoiler: false,
-                waveform: audioMeta?.waveform,
-                audioDuration: audioMeta?.audioDuration,
-              },
-            })
-          );
+              metadata: metadatas[i]!,
+            });
+          });
         } else {
-          safeFiles.forEach((f) =>
+          safeFiles.forEach((f, i) =>
             fileItems.push({
               file: f,
               originalFile: f,
               encInfo: undefined,
-              metadata: {
-                markedAsSpoiler: false,
-                waveform: audioMeta?.waveform,
-                audioDuration: audioMeta?.audioDuration,
-              },
+              metadata: metadatas[i]!,
             })
           );
         }
+
         setSelectedFiles({
           type: 'PUT',
           item: fileItems,

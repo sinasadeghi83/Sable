@@ -157,22 +157,25 @@ export const getAudioMsgContent = (item: TUploadItem, mxc: string): AudioMsgCont
     info: {
       mimetype: file.type,
       size: file.size,
-      duration: markedAsSpoiler || !audioDuration ? 0 : audioDuration * 1000,
+      duration: markedAsSpoiler || !audioDuration ? 0 : audioDuration,
     },
 
     // Element-compatible unstable extensible-event keys
     'org.matrix.msc1767.audio': {
       waveform: waveform?.map((v) => Math.round(v * 1024)),
-      duration: markedAsSpoiler || !audioDuration ? 0 : audioDuration * 1000,
+      duration: markedAsSpoiler || !audioDuration ? 0 : audioDuration,
     },
     'org.matrix.msc1767.text': item.body && item.body.length > 0 ? item.body : fallbackBody,
-    'org.matrix.msc3245.voice.v2': {
+  };
+  if (isVoice) {
+    content['org.matrix.msc3245.voice.v2'] = {
       duration: markedAsSpoiler || !audioDuration ? 0 : audioDuration,
       waveform: waveform?.map((v) => Math.round(v * 1024)),
-    },
+    };
+    content.info.duration = markedAsSpoiler || !audioDuration ? 0 : audioDuration * 1000;
     // for element compat
-    'org.matrix.msc3245.voice': {},
-  };
+    content['org.matrix.msc3245.voice'] = {};
+  }
   if (encInfo) {
     content.file = {
       ...encInfo,

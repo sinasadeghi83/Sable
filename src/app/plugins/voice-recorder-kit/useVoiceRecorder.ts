@@ -196,8 +196,8 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
     if (startTimeRef.current === null) {
       return secondsRef.current;
     }
-    const elapsedSeconds = Math.floor((Date.now() - startTimeRef.current) / 1000);
-    return Math.max(secondsRef.current, elapsedSeconds);
+    const elapsedMilli = Math.floor(Date.now() - startTimeRef.current);
+    return Math.max(secondsRef.current * 1000, elapsedMilli);
   }, []);
 
   const emitStopPayload = useCallback(
